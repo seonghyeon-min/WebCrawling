@@ -3,19 +3,23 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.alert import Alert
 from selenium.common.exceptions import NoSuchElementException, UnexpectedAlertPresentException, WebDriverException
+from sqlalchemy import create_engine
 import time
 import pyperclip
+import pymysql
 import pandas as pd
 
-# < --------------------------- precondiion ---------------------------------- > #
+# < --------------------------- precondiion --------------------------------------------------- > #
 
 CHROMDRIVE_PATH = r"C:\Users\test\Desktop\WebCrawling\chromedriver-win32\chromedriver-win32\chromedriver.exe"  # 반드시 chrome version 확인할 것
 USER_ID = 'seonghyeon.min'
 USER_PW = 'alstjdgus@3498'
 DF = {'PlatformCode' : [], 'Country' : [], 'NPV' : [], 'Status' : [], 'Shelf' : [] } 
+db_connection_str = 'mysql+pymysql://root:!qwe1234@127.0.0.1/crawlingdb'
+db_connection = create_engine(db_connection_str)
+conn = db_connection.connect()
 
 # < --------------------------------------------------------------------------------------------- > 
-
 
 def ProcessCrawling(id, pw) :
     driver = webdriver.Chrome(CHROMDRIVE_PATH) # webdriver는 web을 운전하기 위한 도구라고 보면 됨
@@ -42,7 +46,8 @@ def ProcessCrawling(id, pw) :
     driver.get('http://qt2-kic.smartdesk.lge.com/admin/home/shelf/shelfdisplay/retrieveShelfDisplayList.lge?lnbMenu=Y') # home-shelf url 
     driver.find_element(By.XPATH,'//*[@id="sdpForm"]/fieldset/div/table/tbody/tr[1]/td[2]/div').click()
 
-    pyperclip.copy('webOSTV 23-S23Y')
+    pyperclip.copy('webOSTV 23-S23Y') # flexible
+    
     driver.find_element(By.XPATH, '//*[@id="sdpForm"]/fieldset/div/table/tbody/tr[1]/td[2]/div/div/div/input').send_keys(Keys.CONTROL, 'v')
     driver.find_element(By.XPATH, '//*[@id="sdpForm"]/fieldset/div/table/tbody/tr[1]/td[2]/div/div/div/input').send_keys(Keys.ENTER)
 
@@ -59,12 +64,15 @@ def ProcessCrawling(id, pw) :
     Pagnation = list(driver.find_element(By.XPATH, '//*[@id="sdpForm"]/nav/ul').text)
     PageList = ''.join(Pagnation).split('\n')
     
-    try : 
+    if 'Next' in PageList :
         startpageidx = PageList.index('1')
         endpageidx = PageList.index('Next')-1
-    except ValueError :
-        startpageidx, endpageidx = 1, 1
-        print('> ! -- Pagnation : 1 -- < ')
+
+    else :
+        startpageidx = PageList.index('1')
+        endpageidx = PageList[-1]
+
+    print(f' > -- complete setting from {startpageidx} to {endpageidx} -- <')
 
     for page in range(startpageidx, endpageidx + 1) :
         pageSelector =  f'//*[@id="sdpForm"]/nav/ul/li[{page}]/a'
@@ -108,8 +116,14 @@ def ProcessCrawling(id, pw) :
             driver.back()
     
     print('> -- crawling has been finsihed -- < ')
+    print('> -- start inserting to mysql DB -- <')
     df = pd.DataFrame(DF)
-    df.to_excel('result.xlsx')
-    return DF
+    # df.to_excel('result.xlsx')
+    # df.to_sql(name = 'cdata', con=db_connection, if_exists='append', index=False)
+    return df
 
-ProcessCrawling(USER_ID, USER_PW)
+def makesqlite(df) :
+    df.to_sql(name='cdata', con=db_connection, if_exists='fail', index=False)
+    
+Crawdf = ProcessCrawling(USER_ID, USER_PW)
+makesqlite(Crawdf)
