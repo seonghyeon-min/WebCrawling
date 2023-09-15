@@ -4,6 +4,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.alert import Alert
 from selenium.common.exceptions import NoSuchElementException, UnexpectedAlertPresentException, WebDriverException
 from sqlalchemy import create_engine
+from datetime import datetime
 import time
 import pyperclip
 import pymysql
@@ -18,6 +19,7 @@ DF = {'PlatformCode' : [], 'Country' : [], 'NPV' : [], 'Status' : [], 'Shelf' : 
 db_connection_str = 'mysql+pymysql://root:!qwe1234@127.0.0.1/crawlingdb'
 db_connection = create_engine(db_connection_str)
 conn = db_connection.connect()
+PlatformCode = 'webOSTV 23-S23Z'
 
 # < --------------------------------------------------------------------------------------------- > 
 
@@ -46,7 +48,7 @@ def ProcessCrawling(id, pw) :
     driver.get('http://qt2-kic.smartdesk.lge.com/admin/home/shelf/shelfdisplay/retrieveShelfDisplayList.lge?lnbMenu=Y') # home-shelf url 
     driver.find_element(By.XPATH,'//*[@id="sdpForm"]/fieldset/div/table/tbody/tr[1]/td[2]/div').click()
 
-    pyperclip.copy('webOSTV 23-S23Y') # flexible
+    pyperclip.copy(PlatformCode) # flexible
     
     driver.find_element(By.XPATH, '//*[@id="sdpForm"]/fieldset/div/table/tbody/tr[1]/td[2]/div/div/div/input').send_keys(Keys.CONTROL, 'v')
     driver.find_element(By.XPATH, '//*[@id="sdpForm"]/fieldset/div/table/tbody/tr[1]/td[2]/div/div/div/input').send_keys(Keys.ENTER)
@@ -69,8 +71,8 @@ def ProcessCrawling(id, pw) :
         endpageidx = PageList.index('Next')-1
 
     else :
-        startpageidx = PageList.index('1')
-        endpageidx = PageList[-1]
+        startpageidx = int(PageList[PageList.index('1')])
+        endpageidx = int(PageList[-1])
 
     print(f' > -- complete setting from {startpageidx} to {endpageidx} -- <')
 
@@ -83,7 +85,7 @@ def ProcessCrawling(id, pw) :
         table = driver.find_element(By.XPATH, '//*[@id="sdpForm"]/div[3]/table/tbody')
         tr = len(table.find_elements(By.TAG_NAME, 'tr'))
         
-        print(f' > -- start crawling {tr} of data -- < ')
+        print(f' > -- start crawling {tr} of {page} data -- < ')
         
         # < -- click the shelf display ID -- > # 
         for num in range(1, tr+1) :
@@ -117,13 +119,19 @@ def ProcessCrawling(id, pw) :
     
     print('> -- crawling has been finsihed -- < ')
     print('> -- start inserting to mysql DB -- <')
-    df = pd.DataFrame(DF)
+    df = pd.DataFrame(DF, PlatformCode)
     # df.to_excel('result.xlsx')
-    # df.to_sql(name = 'cdata', con=db_connection, if_exists='append', index=False)
+
     return df
 
-def makesqlite(df) :
-    df.to_sql(name='cdata', con=db_connection, if_exists='fail', index=False)
-    
+def makesqlite(df, plfcode) :
+    try :
+        today = datetime.today()
+        mkname = ''.join(map(str, [today.year, today.month, today.day, today.hour, today.minute, today.second]))
+        df.to_sql(name=f'{plfcode}_{mkname}', con=db_connection, if_exists='fail', index=False)
+        print('> -- Database Created -- < ')
+    except ValueError :
+        print('[WARN] Database could not be created. please DB name or Data status')
+        
 Crawdf = ProcessCrawling(USER_ID, USER_PW)
 makesqlite(Crawdf)
